@@ -3,31 +3,25 @@ using BateriaApp.Domain;
 
 namespace BateriaApp.DAL.Formato;
 
-/// <summary>
-/// Formato alternativo: cada evento se escribe como un bloque de varios renglones con
-/// todos los datos de la batería detallados. Demuestra que el formato es intercambiable
-/// sin modificar ni una línea del repositorio.
-/// </summary>
-public sealed class FormateadorDetallado : IFormateadorRegistro
+// Otro formato posible: cada evento ocupa varios renglones con todo el detalle.
+public class FormateadorDetallado : IFormateadorRegistro
 {
-    /// <inheritdoc />
-    public string Nombre => "Detallado (bloque multilínea)";
-
-    /// <inheritdoc />
-    public string Formatear(RegistroBitacora registro)
+    public string Nombre
     {
-        ArgumentNullException.ThrowIfNull(registro);
+        get { return "Detallado"; }
+    }
 
-        var constructor = new StringBuilder();
+    public string Formatear(EstadoBateria estado)
+    {
+        StringBuilder texto = new StringBuilder();
 
-        constructor.AppendLine("=== EVENTO DE BATERIA ===");
-        constructor.AppendLine($"  Fecha y hora    : {registro.FechaHora:dd/MM/yyyy HH:mm:ss}");
-        constructor.AppendLine($"  Origen          : {registro.Origen}");
-        constructor.AppendLine($"  Conectada       : {(registro.Conectado ? "SI" : "NO")}");
-        constructor.AppendLine($"  Carga           : {registro.Carga} %");
-        constructor.AppendLine($"  Tiempo de carga : {registro.TiempoCarga} min");
-        constructor.AppendLine($"  Tiempo de uso   : {registro.TiempoUso} min");
+        texto.AppendLine("--- evento ---");
+        texto.AppendLine("Fecha: " + estado.FechaHora.ToString("dd/MM/yyyy HH:mm:ss"));
+        texto.AppendLine("Conectada: " + (estado.Conectado ? "SI" : "NO"));
+        texto.AppendLine("Carga: " + estado.Carga + " %");
+        texto.AppendLine("Tiempo de carga: " + estado.TiempoCarga + " min");
+        texto.AppendLine("Tiempo de uso: " + estado.TiempoUso + " min");
 
-        return constructor.ToString();
+        return texto.ToString();
     }
 }

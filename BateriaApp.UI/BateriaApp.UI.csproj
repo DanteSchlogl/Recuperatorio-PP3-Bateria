@@ -8,12 +8,8 @@
     <RootNamespace>BateriaApp.UI</RootNamespace>
     <AssemblyName>BateriaApp.UI</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!--
-      La solución apunta a net8.0 (LTS) para poder abrirse tanto en Visual Studio 2022
-      como en versiones posteriores. RollForward permite que el ejecutable se inicie
-      también sobre runtimes más nuevos (por ejemplo .NET 10) cuando el runtime 8.0
-      no está instalado en la máquina.
-    -->
+    <!-- Apunta a net8.0 para que abra en Visual Studio 2022 y posteriores. -->
+    <!-- RollForward hace que tambien arranque en runtimes mas nuevos, como .NET 10. -->
     <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 

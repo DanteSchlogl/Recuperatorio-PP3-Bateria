@@ -1,310 +1,261 @@
 using BateriaApp.BLL;
-using BateriaApp.Domain;
 using BateriaApp.Domain.Exceptions;
 
 namespace BateriaApp.UI;
 
-/// <summary>
-/// Capa de presentación: único proyecto ejecutable de la solución.
-/// Arma el servicio a través de la fábrica, registra los dos observadores concretos
-/// (<see cref="SuscriptorVisual"/>, de esta capa, y <c>SuscriptorBitacora</c>, de BLL)
-/// y brinda una demostración automática más un menú interactivo de prueba.
-/// </summary>
+// Programa principal. Primero corre una demostracion sola y despues
+// muestra un menu para probar la bateria a mano.
 internal static class Program
 {
-    /// <summary>Carpeta donde se guardan los archivos de bitácora.</summary>
     private const string CarpetaBitacoras = "Bitacoras";
 
-    /// <summary>Días de bitácora que se conservan sin rotar.</summary>
-    private const int DiasRetencionBitacoras = 30;
-
-    /// <summary>Punto de entrada de la aplicación.</summary>
-    /// <param name="args">
-    /// Argumentos de línea de comandos. Con <c>--demo</c> sólo se ejecuta la demostración
-    /// automática (sin menú), lo que permite correr el programa en forma no interactiva.
-    /// </param>
-    /// <returns>0 si la ejecución finalizó correctamente.</returns>
     private static int Main(string[] args)
     {
-        try
+        Console.WriteLine("INSTITUTO UNIVERSITARIO LEONARDO DA VINCI");
+        Console.WriteLine("Practicas Profesionalizantes III - Recuperatorio");
+        Console.WriteLine("Patron Observer aplicado a la clase Bateria");
+        Console.WriteLine("Alumno: Dante Schlogl");
+        Console.WriteLine();
+
+        // Con --demo corre solo la demostracion y sale, sin menu.
+        bool soloDemo = false;
+
+        foreach (string arg in args)
         {
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
-        }
-        catch (IOException)
-        {
-            // Algunas consolas no permiten cambiar la codificación; se continúa igual.
+            if (arg.ToLower() == "--demo") soloDemo = true;
         }
 
-        MostrarEncabezado();
+        // Armo el servicio y los dos suscriptores.
+        ServicioBateria servicio = FabricaBateria.Crear(50, false, CarpetaBitacoras, FormatoBitacora.TextoPlano);
+        SuscriptorVisual visual = new SuscriptorVisual();
 
-        bool soloDemostracion = args.Any(argumento => argumento.Equals("--demo", StringComparison.OrdinalIgnoreCase));
+        servicio.ErrorNotificacion += mensaje => Console.WriteLine("Ojo: " + mensaje);
 
-        ServicioBateria servicio = FabricaBateria.Crear(
-            cargaInicial: 50,
-            conectado: false,
-            carpetaBitacoras: CarpetaBitacoras,
-            formato: FormatoBitacora.TextoPlano);
+        Console.WriteLine("Carpeta de bitacoras: " + Path.GetFullPath(servicio.CarpetaBitacoras));
+        Console.WriteLine("Arranco con 50 % de carga y desconectada.");
 
-        var suscriptorVisual = new SuscriptorVisual();
-
-        // El fallo de un observador se informa por pantalla, pero no interrumpe la
-        // notificación de los demás suscriptores.
-        servicio.ErrorNotificacion += (_, datos) =>
-            Consola.Error($"El observador '{datos.Observador.Nombre}' falló: {datos.Excepcion.Message}");
-
-        Consola.Info($"Carpeta de bitácoras : {Path.GetFullPath(servicio.CarpetaBitacoras)}");
-        Consola.Info("Formato de bitácora  : texto plano (una línea por evento)");
-        Consola.Info("Estado inicial       : 50 % de carga, desconectada");
-
-        Consola.Accion("Suscribiendo observadores: SuscriptorVisual (UI) y SuscriptorBitacora (BLL)");
-        servicio.Suscribir(suscriptorVisual);
+        servicio.Suscribir(visual);
         servicio.Suscribir(servicio.Bitacora);
-        Consola.Exito($"Observadores suscriptos: {servicio.CantidadSuscriptores}");
+        Console.WriteLine("Suscriptos: " + servicio.CantidadSuscriptores + " (visual y bitacora)");
 
-        EjecutarDemostracion(servicio, suscriptorVisual);
+        Demostracion(servicio, visual);
 
-        if (!soloDemostracion)
+        if (!soloDemo)
         {
-            EjecutarMenu(servicio, suscriptorVisual);
+            Menu(servicio, visual);
         }
 
-        MostrarResumen(servicio, suscriptorVisual);
+        Resumen(servicio, visual);
 
         return 0;
     }
 
-    /// <summary>Muestra el encabezado institucional de la aplicación.</summary>
-    private static void MostrarEncabezado()
+    // Recorro los casos mas importantes del ejercicio uno por uno.
+    private static void Demostracion(ServicioBateria servicio, SuscriptorVisual visual)
     {
-        Consola.Titulo("INSTITUTO UNIVERSITARIO LEONARDO DA VINCI");
-        Consola.Info("Carrera     : Analista en Sistemas Informáticos");
-        Consola.Info("Asignatura  : Prácticas Profesionalizantes III");
-        Consola.Info("Instancia   : Examen Recuperatorio");
-        Consola.Info("Ejercicio   : Patrón Observer aplicado a la clase Bateria");
-        Consola.Info("Alumno      : Dante Schlögl");
-        Consola.Info("Arquitectura: UI - BLL - DAL - Domain (4 capas)");
-    }
+        Console.WriteLine();
+        Console.WriteLine("=== Demostracion ===");
 
-    /// <summary>
-    /// Recorre automáticamente los escenarios más importantes: suscripción, notificación
-    /// al cambiar el estado de conexión, cálculo de tiempos, desuscripción, re-suscripción
-    /// y validación de rangos.
-    /// </summary>
-    /// <param name="servicio">Servicio de la batería.</param>
-    /// <param name="suscriptorVisual">Observador visual, para poder suscribirlo y desuscribirlo.</param>
-    private static void EjecutarDemostracion(ServicioBateria servicio, SuscriptorVisual suscriptorVisual)
-    {
-        Consola.Titulo("PARTE 1 - DEMOSTRACION AUTOMATICA");
-
-        Consola.Accion("Paso 1: se conecta el cargador (Conectado = true) -> notifica a los dos observadores");
+        Console.WriteLine();
+        Console.WriteLine("Paso 1: conecto el cargador.");
         servicio.Conectar();
 
-        Consola.Accion("Paso 2: la carga sube al 80 % -> se recalcula el tiempo de carga");
+        Console.WriteLine();
+        Console.WriteLine("Paso 2: subo la carga al 80 %.");
         servicio.CambiarCarga(80);
 
-        Consola.Accion("Paso 3: la batería llega al 100 % -> el tiempo de carga debe ser 0");
+        Console.WriteLine();
+        Console.WriteLine("Paso 3: la lleno al 100 %.");
         servicio.CambiarCarga(100);
 
-        Consola.Accion("Paso 4: se desconecta el cargador (Conectado = false) -> ahora se informa el tiempo de uso");
+        Console.WriteLine();
+        Console.WriteLine("Paso 4: desconecto el cargador.");
         servicio.Desconectar();
 
-        Consola.Accion("Paso 5: la carga baja al 25 % -> se recalcula el tiempo estimado de uso");
+        Console.WriteLine();
+        Console.WriteLine("Paso 5: bajo la carga al 25 %.");
         servicio.CambiarCarga(25);
 
-        Consola.Accion("Paso 6: se desuscribe el SuscriptorVisual (la bitácora sigue activa)");
-        bool seDioDeBaja = servicio.Desuscribir(suscriptorVisual);
-        Consola.Exito($"Desuscripción {(seDioDeBaja ? "correcta" : "fallida")}. Observadores suscriptos: {servicio.CantidadSuscriptores}");
+        Console.WriteLine();
+        Console.WriteLine("Paso 6: desuscribo el visual, queda solo la bitacora.");
+        servicio.Desuscribir(visual);
+        Console.WriteLine("Suscriptos ahora: " + servicio.CantidadSuscriptores);
 
-        Consola.Accion("Paso 7: cambia el estado SIN el observador visual -> sólo lo registra la bitácora");
+        Console.WriteLine();
+        Console.WriteLine("Paso 7: cambio el estado sin el visual.");
         servicio.Conectar();
         servicio.CambiarCarga(60);
 
-        Consola.Accion("Paso 8: se vuelve a suscribir el SuscriptorVisual -> recibe el estado actual de inmediato");
-        servicio.Suscribir(suscriptorVisual);
+        Console.WriteLine();
+        Console.WriteLine("Paso 8: vuelvo a suscribir el visual.");
+        servicio.Suscribir(visual);
 
-        Consola.Accion("Paso 9: se intenta asignar una carga inválida (150 %) para mostrar la validación");
+        Console.WriteLine();
+        Console.WriteLine("Paso 9: pruebo una carga invalida (150).");
         try
         {
             servicio.CambiarCarga(150);
-            Consola.Advertencia("No se lanzó la excepción esperada.");
         }
-        catch (CargaFueraDeRangoException excepcion)
+        catch (CargaFueraDeRangoException ex)
         {
-            Consola.Error("Excepción controlada: " + excepcion.Message);
+            Console.WriteLine("Se controlo el error: " + ex.Message);
         }
-
-        Consola.Accion("Paso 10: valor inválido negativo (-10 %)");
-        try
-        {
-            servicio.CambiarCarga(-10);
-            Consola.Advertencia("No se lanzó la excepción esperada.");
-        }
-        catch (CargaFueraDeRangoException excepcion)
-        {
-            Consola.Error("Excepción controlada: " + excepcion.Message);
-        }
-
-        Consola.Exito($"Estado final de la demostración: {servicio.EstadoActual.Carga} % - {servicio.EstadoActual.DescripcionEstado}");
     }
 
-    /// <summary>Muestra el menú interactivo y atiende la opción elegida hasta que se sale.</summary>
-    /// <param name="servicio">Servicio de la batería.</param>
-    /// <param name="suscriptorVisual">Observador visual, para poder suscribirlo y desuscribirlo.</param>
-    private static void EjecutarMenu(ServicioBateria servicio, SuscriptorVisual suscriptorVisual)
+    // Menu simple para probar a mano.
+    private static void Menu(ServicioBateria servicio, SuscriptorVisual visual)
     {
         while (true)
         {
-            Consola.Titulo("PARTE 2 - MENU INTERACTIVO");
-            Consola.Info("1) Conectar el cargador");
-            Consola.Info("2) Desconectar el cargador");
-            Consola.Info("3) Establecer el porcentaje de carga");
-            Consola.Info("4) Suscribir el SuscriptorVisual");
-            Consola.Info("5) Desuscribir el SuscriptorVisual");
-            Consola.Info("6) Forzar una notificación (Notificar)");
-            Consola.Info("7) Leer la bitácora del día");
-            Consola.Info("8) Rotar las bitácoras anteriores");
-            Consola.Info("0) Salir");
             Console.WriteLine();
-            Console.Write("  Opción: ");
+            Console.WriteLine("=== Menu ===");
+            Console.WriteLine("1) Conectar el cargador");
+            Console.WriteLine("2) Desconectar el cargador");
+            Console.WriteLine("3) Cambiar la carga");
+            Console.WriteLine("4) Suscribir el visual");
+            Console.WriteLine("5) Desuscribir el visual");
+            Console.WriteLine("6) Forzar el aviso a todos");
+            Console.WriteLine("7) Ver la bitacora de hoy");
+            Console.WriteLine("8) Rotar bitacoras viejas");
+            Console.WriteLine("0) Salir");
+            Console.Write("Opcion: ");
 
             string? opcion = Console.ReadLine();
 
-            if (opcion is null)
+            // Si ya no hay entrada (por ejemplo al correrlo por un pipe) salgo sin error.
+            if (opcion == null)
             {
                 Console.WriteLine();
-                Consola.Info("Entrada finalizada (fin de la entrada estándar). Se cierra el menú.");
+                Console.WriteLine("No hay mas entrada, salgo.");
                 return;
             }
+
+            opcion = opcion.Trim();
+
+            if (opcion == "0") return;
 
             Console.WriteLine();
 
-            if (opcion.Trim() == "0")
+            try
             {
+                Opcion(opcion, servicio, visual);
+            }
+            catch (CargaFueraDeRangoException ex)
+            {
+                Console.WriteLine("Carga invalida: " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+        }
+    }
+
+    // Ejecuto la opcion que eligio el usuario.
+    private static void Opcion(string opcion, ServicioBateria servicio, SuscriptorVisual visual)
+    {
+        if (opcion == "1")
+        {
+            servicio.Conectar();
+        }
+        else if (opcion == "2")
+        {
+            servicio.Desconectar();
+        }
+        else if (opcion == "3")
+        {
+            Console.Write("Nueva carga (0 a 100): ");
+            string? texto = Console.ReadLine();
+
+            if (texto == null) return;
+
+            int carga;
+
+            if (!int.TryParse(texto.Trim(), out carga))
+            {
+                Console.WriteLine("Eso no es un numero.");
                 return;
             }
 
-            try
-            {
-                EjecutarOpcionDelMenu(opcion.Trim(), servicio, suscriptorVisual);
-            }
-            catch (CargaFueraDeRangoException excepcion)
-            {
-                Consola.Error("Carga inválida: " + excepcion.Message);
-            }
-            catch (Exception excepcion)
-            {
-                Consola.Error("Error inesperado: " + excepcion.Message);
-            }
+            servicio.CambiarCarga(carga);
         }
-    }
-
-    /// <summary>Ejecuta la opción elegida en el menú.</summary>
-    /// <param name="opcion">Texto ingresado por el usuario.</param>
-    /// <param name="servicio">Servicio de la batería.</param>
-    /// <param name="suscriptorVisual">Observador visual.</param>
-    private static void EjecutarOpcionDelMenu(string opcion, ServicioBateria servicio, SuscriptorVisual suscriptorVisual)
-    {
-        switch (opcion)
+        else if (opcion == "4")
         {
-            case "1":
-                servicio.Conectar();
-                break;
+            servicio.Suscribir(visual);
+            Console.WriteLine("Suscriptos: " + servicio.CantidadSuscriptores);
+        }
+        else if (opcion == "5")
+        {
+            bool estaba = servicio.Desuscribir(visual);
 
-            case "2":
-                servicio.Desconectar();
-                break;
+            if (estaba)
+            {
+                Console.WriteLine("Visual desuscripto.");
+            }
+            else
+            {
+                Console.WriteLine("El visual no estaba suscripto.");
+            }
 
-            case "3":
-                Console.Write("  Indique la nueva carga (0 a 100): ");
-                string? ingresado = Console.ReadLine();
-
-                if (ingresado is null)
-                {
-                    Consola.Info("Entrada finalizada.");
-                    return;
-                }
-
-                if (!int.TryParse(ingresado.Trim(), out int carga))
-                {
-                    Consola.Error($"'{ingresado.Trim()}' no es un número entero válido.");
-                    return;
-                }
-
-                servicio.CambiarCarga(carga);
-                break;
-
-            case "4":
-                servicio.Suscribir(suscriptorVisual);
-                Consola.Exito($"SuscriptorVisual suscripto. Observadores: {servicio.CantidadSuscriptores}");
-                break;
-
-            case "5":
-                bool dadoDeBaja = servicio.Desuscribir(suscriptorVisual);
-                Consola.Info($"SuscriptorVisual {(dadoDeBaja ? "desuscripto" : "no estaba suscripto")}. Observadores: {servicio.CantidadSuscriptores}");
-                break;
-
-            case "6":
-                servicio.Notificar();
-                Consola.Exito("Notificación forzada a todos los suscriptores.");
-                break;
-
-            case "7":
-                MostrarBitacoraDelDia(servicio);
-                break;
-
-            case "8":
-                IReadOnlyList<string> movidos = servicio.RotarBitacoras(DiasRetencionBitacoras);
-                Consola.Exito(movidos.Count == 0
-                    ? $"No había bitácoras con más de {DiasRetencionBitacoras} días para rotar."
-                    : $"Se rotaron {movidos.Count} archivo(s) a la subcarpeta 'historico'.");
-                break;
-
-            default:
-                Consola.Advertencia($"La opción '{opcion}' no es válida.");
-                break;
+            Console.WriteLine("Suscriptos: " + servicio.CantidadSuscriptores);
+        }
+        else if (opcion == "6")
+        {
+            servicio.Notificar();
+        }
+        else if (opcion == "7")
+        {
+            MostrarBitacora(servicio);
+        }
+        else if (opcion == "8")
+        {
+            IReadOnlyList<string> movidos = servicio.RotarBitacoras(30);
+            Console.WriteLine("Archivos rotados: " + movidos.Count);
+        }
+        else
+        {
+            Console.WriteLine("Opcion invalida.");
         }
     }
 
-    /// <summary>Muestra por pantalla el contenido de la bitácora del día.</summary>
-    /// <param name="servicio">Servicio de la batería.</param>
-    private static void MostrarBitacoraDelDia(ServicioBateria servicio)
+    // Muestro la bitacora del dia de hoy.
+    private static void MostrarBitacora(ServicioBateria servicio)
     {
         DateTime hoy = DateTime.Today;
-        IReadOnlyList<string> renglones = servicio.LeerBitacora(hoy);
 
-        Consola.Info("Archivo: " + Path.GetFullPath(servicio.ObtenerRutaBitacora(hoy)));
+        Console.WriteLine("Archivo: " + Path.GetFullPath(servicio.ObtenerRutaBitacora(hoy)));
 
-        if (renglones.Count == 0)
+        IReadOnlyList<string> lineas = servicio.LeerBitacora(hoy);
+
+        if (lineas.Count == 0)
         {
-            Consola.Info("Todavía no hay registros para la fecha de hoy.");
+            Console.WriteLine("Todavia no hay eventos.");
             return;
         }
 
-        Consola.Separador();
-
-        foreach (string renglon in renglones)
+        foreach (string linea in lineas)
         {
-            Console.WriteLine("  " + renglon);
+            Console.WriteLine(linea);
         }
-
-        Consola.Separador();
     }
 
-    /// <summary>Muestra el resumen final: contenido de la bitácora, contadores y rotación.</summary>
-    /// <param name="servicio">Servicio de la batería.</param>
-    /// <param name="suscriptorVisual">Observador visual, para informar cuántas notificaciones recibió.</param>
-    private static void MostrarResumen(ServicioBateria servicio, SuscriptorVisual suscriptorVisual)
+    // Muestro la bitacora y dos contadores para comprobar que el patron funciona.
+    private static void Resumen(ServicioBateria servicio, SuscriptorVisual visual)
     {
-        Consola.Titulo("BITACORA GENERADA EN ESTA EJECUCION");
-        MostrarBitacoraDelDia(servicio);
+        Console.WriteLine();
+        Console.WriteLine("=== Bitacora de hoy ===");
+        MostrarBitacora(servicio);
 
-        Consola.Titulo("RESUMEN");
-        Consola.Info($"Actualizaciones recibidas por el SuscriptorVisual : {suscriptorVisual.Actualizaciones}");
-        Consola.Info($"Eventos registrados por el SuscriptorBitacora      : {servicio.Bitacora.EventosRegistrados}");
-        Consola.Info($"Observadores suscriptos al finalizar                : {servicio.CantidadSuscriptores}");
+        Console.WriteLine();
+        Console.WriteLine("=== Resumen ===");
+        Console.WriteLine("Avisos que recibio el visual: " + visual.Actualizaciones);
+        Console.WriteLine("Eventos guardados en la bitacora: " + servicio.Bitacora.EventosRegistrados);
+        Console.WriteLine("Suscriptos al final: " + servicio.CantidadSuscriptores);
 
-        IReadOnlyList<string> movidos = servicio.RotarBitacoras(DiasRetencionBitacoras);
-        Consola.Info($"Rotación de bitácoras (retención {DiasRetencionBitacoras} días)     : {movidos.Count} archivo(s) movido(s)");
-        Consola.Info("Fin del programa.");
+        IReadOnlyList<string> movidos = servicio.RotarBitacoras(30);
+        Console.WriteLine("Bitacoras rotadas (mas de 30 dias): " + movidos.Count);
+
+        Console.WriteLine();
+        Console.WriteLine("Fin del programa.");
     }
 }

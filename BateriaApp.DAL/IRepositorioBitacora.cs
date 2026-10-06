@@ -2,43 +2,23 @@ using BateriaApp.Domain;
 
 namespace BateriaApp.DAL;
 
-/// <summary>
-/// Contrato de persistencia de la bitácora de la batería.
-/// La capa de negocio depende de esta abstracción y no del archivo concreto: se puede
-/// cambiar el almacenamiento (archivo de texto, base de datos, servicio en la nube) sin
-/// modificar BLL ni UI.
-/// </summary>
+// Lo que necesita la capa de negocio para guardar la bitacora.
+// No dice como ni donde se guarda, eso lo decide la clase que lo implementa.
 public interface IRepositorioBitacora
 {
-    /// <summary>Carpeta donde se guardan los archivos de bitácora.</summary>
     string Carpeta { get; }
 
-    /// <summary>Marca de tiempo del último evento registrado, o <c>null</c> si todavía no hay ninguno.</summary>
-    DateTime? FechaUltimoRegistro { get; }
-
-    /// <summary>Cantidad total de eventos registrados en esta ejecución.</summary>
     int EventosRegistrados { get; }
 
-    /// <summary>Devuelve la ruta del archivo de bitácora que corresponde a una fecha.</summary>
-    /// <param name="fecha">Fecha cuya ruta se desea obtener.</param>
-    /// <returns>Ruta del archivo diario.</returns>
+    // Me dice la ruta del archivo que le toca a esa fecha.
     string ObtenerRutaArchivo(DateTime fecha);
 
-    /// <summary>Persiste un registro en el archivo del día que corresponda a su marca de tiempo.</summary>
-    /// <param name="registro">Registro a guardar.</param>
-    void Registrar(RegistroBitacora registro);
+    // Guarda un evento.
+    void Registrar(EstadoBateria estado);
 
-    /// <summary>Lee todos los renglones de la bitácora de una fecha.</summary>
-    /// <param name="fecha">Fecha de la bitácora a leer.</param>
-    /// <returns>Renglones leídos; colección vacía si el archivo no existe.</returns>
+    // Devuelve las lineas de la bitacora de una fecha.
     IReadOnlyList<string> LeerBitacora(DateTime fecha);
 
-    /// <summary>
-    /// Aplica la rotación por fecha: mueve a la subcarpeta <c>historico</c> los archivos
-    /// diarios más antiguos que la retención indicada, de modo que la carpeta principal
-    /// sólo conserve los días recientes.
-    /// </summary>
-    /// <param name="diasARetener">Cantidad de días que se conservan sin rotar.</param>
-    /// <returns>Rutas de los archivos que se movieron.</returns>
+    // Mueve a la carpeta "historico" los archivos mas viejos que los dias indicados.
     IReadOnlyList<string> Rotar(int diasARetener);
 }

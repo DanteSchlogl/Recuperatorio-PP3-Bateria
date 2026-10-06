@@ -5,93 +5,67 @@ using BateriaApp.Domain;
 
 namespace BateriaApp.DAL;
 
-/// <summary>
-/// Implementación concreta del repositorio sobre archivos de texto.
-/// <para>
-/// <b>Rotación de archivos por fecha:</b> cada día se escribe en su propio archivo
-/// (<c>bitacora_AAAA-MM-DD.txt</c>) dentro de la carpeta configurada. De esta manera la
-/// rotación queda garantizada sin procesos externos ni temporizadores: al cambiar el día,
-/// el evento se deriva automáticamente al archivo nuevo. El método <see cref="Rotar"/>
-/// permite además apartar a la subcarpeta <c>historico</c> los archivos ya antiguos.
-/// </para>
-/// </summary>
+// Guarda la bitacora en un archivo de texto por dia: bitacora_2026-10-06.txt
+// Como es un archivo por fecha, la rotacion sale sola cuando cambia el dia.
 public class RepositorioBitacoraArchivo : IRepositorioBitacora
 {
-    private const string PrefijoArchivo = "bitacora_";
-    private const string SufijoArchivo = ".txt";
-    private const string NombreSubcarpetaHistorico = "historico";
-
     private readonly IFormateadorRegistro _formateador;
 
-    /// <summary>Objeto de sincronización: protege el acceso al archivo ante escrituras concurrentes.</summary>
-    private readonly object _candado = new();
+    // Para que dos escrituras al mismo tiempo no rompan el archivo.
+    private readonly object _candado = new object();
 
-    /// <summary>Crea el repositorio.</summary>
-    /// <param name="carpeta">Carpeta donde se guardarán las bitácoras. Por omisión, <c>Bitacoras</c>.</param>
-    /// <param name="formateador">Estrategia de formato a utilizar. Por omisión, texto plano.</param>
-    public RepositorioBitacoraArchivo(string? carpeta = null, IFormateadorRegistro? formateador = null)
+    public RepositorioBitacoraArchivo(string carpeta, IFormateadorRegistro formateador)
     {
-        Carpeta = string.IsNullOrWhiteSpace(carpeta) ? "Bitacoras" : carpeta.Trim();
-        _formateador = formateador ?? new FormateadorTextoPlano();
+        if (string.IsNullOrWhiteSpace(carpeta))
+        {
+            Carpeta = "Bitacoras";
+        }
+        else
+        {
+            Carpeta = carpeta;
+        }
+
+        if (formateador == null)
+        {
+            _formateador = new FormateadorTextoPlano();
+        }
+        else
+        {
+            _formateador = formateador;
+        }
     }
 
-    /// <inheritdoc />
-    public string Carpeta { get; }
+    public string Carpeta { get; private set; }
 
-    /// <inheritdoc />
-    public DateTime? FechaUltimoRegistro { get; private set; }
-
-    /// <inheritdoc />
     public int EventosRegistrados { get; private set; }
 
-    /// <summary>Estrategia de formato actualmente en uso.</summary>
-    public IFormateadorRegistro Formateador => _formateador;
-
-    /// <inheritdoc />
+    // Armo el nombre del archivo con la fecha.
     public string ObtenerRutaArchivo(DateTime fecha)
-        => Path.Combine(Carpeta, $"{PrefijoArchivo}{fecha:yyyy-MM-dd}{SufijoArchivo}");
-
-    /// <inheritdoc />
-    public void Registrar(RegistroBitacora registro)
     {
-        ArgumentNullException.ThrowIfNull(registro);
+        return Path.Combine(Carpeta, "bitacora_" + fecha.ToString("yyyy-MM-dd") + ".txt");
+    }
 
-        string ruta = ObtenerRutaArchivo(registro.FechaHora);
-        string texto = _formateador.Formatear(registro);
+    public void Registrar(EstadoBateria estado)
+    {
+        string ruta = ObtenerRutaArchivo(estado.FechaHora);
+        string linea = _formateador.Formatear(estado) + Environment.NewLine;
 
         try
         {
             lock (_candado)
             {
-                // Creación de la carpeta si todavía no existe (manejo de archivos).
-                Directory.CreateDirectory(Carpeta);
-
-                // Aseguramos un único salto de línea final, sin importar el formateador elegido.
-                string contenido = texto.EndsWith(Environment.NewLine, StringComparison.Ordinal)
-                    ? texto
-                    : texto + Environment.NewLine;
-
-                // Apertura en modo "append": se crea el archivo si no existe y se
-                // actualiza si ya existe, sin sobrescribir lo anterior.
-                File.AppendAllText(ruta, contenido);
+                Directory.CreateDirectory(Carpeta);  // la creo si no existe
+                File.AppendAllText(ruta, linea);     // agrego al final, no piso lo anterior
             }
 
-            FechaUltimoRegistro = registro.FechaHora;
             EventosRegistrados++;
         }
-        catch (Exception excepcion) when (excepcion is IOException
-                                             or UnauthorizedAccessException
-                                             or NotSupportedException
-                                             or ArgumentException)
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new BitacoraException(
-                $"No se pudo escribir la bitácora en '{Path.GetFullPath(ruta)}': {excepcion.Message}",
-                ruta,
-                excepcion);
+            throw new BitacoraException("No pude escribir la bitacora en " + Path.GetFullPath(ruta), ruta, ex);
         }
     }
 
-    /// <inheritdoc />
     public IReadOnlyList<string> LeerBitacora(DateTime fecha)
     {
         string ruta = ObtenerRutaArchivo(fecha);
@@ -100,104 +74,71 @@ public class RepositorioBitacoraArchivo : IRepositorioBitacora
         {
             if (!File.Exists(ruta))
             {
-                return Array.Empty<string>();
+                return new List<string>();
             }
 
             return File.ReadAllLines(ruta);
         }
-        catch (Exception excepcion) when (excepcion is IOException
-                                             or UnauthorizedAccessException
-                                             or NotSupportedException
-                                             or ArgumentException)
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new BitacoraException(
-                $"No se pudo leer la bitácora en '{Path.GetFullPath(ruta)}': {excepcion.Message}",
-                ruta,
-                excepcion);
+            throw new BitacoraException("No pude leer la bitacora de " + Path.GetFullPath(ruta), ruta, ex);
         }
     }
 
-    /// <inheritdoc />
+    // Rotacion: paso a la carpeta "historico" los archivos mas viejos que N dias.
+    // No borro nada, solo los muevo.
     public IReadOnlyList<string> Rotar(int diasARetener)
     {
-        if (diasARetener < 0)
+        List<string> movidos = new List<string>();
+
+        if (!Directory.Exists(Carpeta))
         {
-            throw new ArgumentOutOfRangeException(nameof(diasARetener), diasARetener, "La cantidad de días a retener no puede ser negativa.");
+            return movidos;
         }
 
-        var movidos = new List<string>();
+        DateTime limite = DateTime.Today.AddDays(-diasARetener);
 
         try
         {
             lock (_candado)
             {
-                if (!Directory.Exists(Carpeta))
+                string[] archivos = Directory.GetFiles(Carpeta, "bitacora_*.txt");
+
+                foreach (string archivo in archivos)
                 {
-                    return movidos;
-                }
+                    if (!EsMasViejoQue(archivo, limite)) continue;
 
-                DateTime limite = DateTime.Today.AddDays(-diasARetener);
-
-                foreach (string archivo in Directory.GetFiles(Carpeta, $"{PrefijoArchivo}*{SufijoArchivo}"))
-                {
-                    if (!TryObtenerFechaDelArchivo(archivo, out DateTime fechaArchivo) || fechaArchivo >= limite)
-                    {
-                        continue;
-                    }
-
-                    string carpetaHistorico = Path.Combine(Carpeta, NombreSubcarpetaHistorico);
+                    string carpetaHistorico = Path.Combine(Carpeta, "historico");
                     Directory.CreateDirectory(carpetaHistorico);
 
                     string destino = Path.Combine(carpetaHistorico, Path.GetFileName(archivo));
 
-                    if (File.Exists(destino))
-                    {
-                        File.Delete(destino);
-                    }
+                    if (File.Exists(destino)) File.Delete(destino);
 
                     File.Move(archivo, destino);
                     movidos.Add(destino);
                 }
             }
         }
-        catch (Exception excepcion) when (excepcion is IOException
-                                             or UnauthorizedAccessException
-                                             or NotSupportedException
-                                             or ArgumentException)
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new BitacoraException(
-                $"No se pudo rotar la bitácora de la carpeta '{Carpeta}': {excepcion.Message}",
-                Carpeta,
-                excepcion);
+            throw new BitacoraException("No pude rotar los archivos de " + Carpeta, Carpeta, ex);
         }
 
         return movidos;
     }
 
-    /// <summary>
-    /// Extrae la fecha del nombre de un archivo de bitácora (<c>bitacora_AAAA-MM-DD.txt</c>).
-    /// </summary>
-    /// <param name="archivo">Ruta del archivo a analizar.</param>
-    /// <param name="fecha">Fecha obtenida del nombre.</param>
-    /// <returns><c>true</c> si el nombre respeta el formato esperado.</returns>
-    private static bool TryObtenerFechaDelArchivo(string archivo, out DateTime fecha)
+    // Saco la fecha del nombre del archivo para saber si paso el limite.
+    private static bool EsMasViejoQue(string archivo, DateTime limite)
     {
-        fecha = default;
-
         string nombre = Path.GetFileNameWithoutExtension(archivo);
+        string textoFecha = nombre.Replace("bitacora_", "");
 
-        if (!nombre.StartsWith(PrefijoArchivo, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
+        DateTime fecha;
 
-        string parteFecha = nombre[PrefijoArchivo.Length..];
+        bool laPude = DateTime.TryParseExact(textoFecha, "yyyy-MM-dd",
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out fecha);
 
-        return DateTime.TryParseExact(
-            parteFecha,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.None,
-            out fecha);
+        return laPude && fecha < limite;
     }
 }

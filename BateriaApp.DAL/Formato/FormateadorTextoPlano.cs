@@ -2,26 +2,31 @@ using BateriaApp.Domain;
 
 namespace BateriaApp.DAL.Formato;
 
-/// <summary>
-/// Formato por omisión: un renglón por evento, con fecha y hora, carga y estado.
-/// Es el más adecuado para una bitácora porque permite leerla y compararla de un vistazo.
-/// </summary>
-public sealed class FormateadorTextoPlano : IFormateadorRegistro
+// Formato simple: un renglon por evento.
+public class FormateadorTextoPlano : IFormateadorRegistro
 {
-    /// <inheritdoc />
-    public string Nombre => "Texto plano (una línea por evento)";
-
-    /// <inheritdoc />
-    public string Formatear(RegistroBitacora registro)
+    public string Nombre
     {
-        ArgumentNullException.ThrowIfNull(registro);
+        get { return "Texto plano"; }
+    }
 
-        string estado = registro.Conectado
-            ? registro.Carga >= 100
-                ? "CARGADA COMPLETA"
-                : $"CARGANDO (faltan {registro.TiempoCarga} min)"
-            : $"EN USO (quedan {registro.TiempoUso} min)";
+    public string Formatear(EstadoBateria estado)
+    {
+        string situacion;
 
-        return $"[{registro.FechaHora:yyyy-MM-dd HH:mm:ss}] {registro.Carga,3}% | {estado,-26} | origen: {registro.Origen}";
+        if (!estado.Conectado)
+        {
+            situacion = "EN USO (quedan " + estado.TiempoUso + " min)";
+        }
+        else if (estado.Carga >= 100)
+        {
+            situacion = "CARGADA COMPLETA";
+        }
+        else
+        {
+            situacion = "CARGANDO (faltan " + estado.TiempoCarga + " min)";
+        }
+
+        return "[" + estado.FechaHora.ToString("dd/MM/yyyy HH:mm:ss") + "] " + estado.Carga + "% - " + situacion;
     }
 }
