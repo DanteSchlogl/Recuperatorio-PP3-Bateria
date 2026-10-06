@@ -1,0 +1,20 @@
+# Archivos generados por la compilación
+bin/
+obj/
+
+# Configuración local de Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Resultado de la ejecución: la bitácora se genera en tiempo de ejecución
+Bitacoras/*.txt
+Bitacoras/historico/
+
+# Archivos del sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store

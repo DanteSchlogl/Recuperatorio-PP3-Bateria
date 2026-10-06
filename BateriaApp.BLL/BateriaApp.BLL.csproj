@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BateriaApp.BLL</RootNamespace>
+    <AssemblyName>BateriaApp.BLL</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BateriaApp.Domain\BateriaApp.Domain.csproj" />
+    <ProjectReference Include="..\BateriaApp.DAL\BateriaApp.DAL.csproj" />
+  </ItemGroup>
+
+</Project>

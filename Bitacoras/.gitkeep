@@ -1,0 +1,10 @@
+Esta carpeta es la que utiliza el programa para escribir las bitácoras.
+
+El archivo de cada día se genera automáticamente con el nombre:
+
+    bitacora_AAAA-MM-DD.txt
+
+Por ejemplo, la bitácora del 6 de octubre de 2026 será bitacora_2026-10-06.txt.
+
+Los archivos .txt no se versionan (ver .gitignore) porque son resultados de la
+ejecución; se crean solos la primera vez que se corre el programa.
