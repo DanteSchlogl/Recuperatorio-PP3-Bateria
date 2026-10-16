@@ -12,7 +12,6 @@ public class RepositorioBitacoraArchivo : IRepositorioBitacora
     private readonly IFormateadorRegistro _formateador;
 
     // Para que dos escrituras al mismo tiempo no rompan el archivo.
-    private readonly object _candado = new object();
 
     public RepositorioBitacoraArchivo(string carpeta, IFormateadorRegistro formateador)
     {
@@ -52,11 +51,8 @@ public class RepositorioBitacoraArchivo : IRepositorioBitacora
 
         try
         {
-            lock (_candado)
-            {
-                Directory.CreateDirectory(Carpeta);  // la creo si no existe
-                File.AppendAllText(ruta, linea);     // agrego al final, no piso lo anterior
-            }
+            Directory.CreateDirectory(Carpeta);  // la creo si no existe
+            File.AppendAllText(ruta, linea);     // agrego al final, no piso lo anterior
 
             EventosRegistrados++;
         }
@@ -100,24 +96,21 @@ public class RepositorioBitacoraArchivo : IRepositorioBitacora
 
         try
         {
-            lock (_candado)
+            string[] archivos = Directory.GetFiles(Carpeta, "bitacora_*.txt");
+
+            foreach (string archivo in archivos)
             {
-                string[] archivos = Directory.GetFiles(Carpeta, "bitacora_*.txt");
+                if (!EsMasViejoQue(archivo, limite)) continue;
 
-                foreach (string archivo in archivos)
-                {
-                    if (!EsMasViejoQue(archivo, limite)) continue;
+                string carpetaHistorico = Path.Combine(Carpeta, "historico");
+                Directory.CreateDirectory(carpetaHistorico);
 
-                    string carpetaHistorico = Path.Combine(Carpeta, "historico");
-                    Directory.CreateDirectory(carpetaHistorico);
+                string destino = Path.Combine(carpetaHistorico, Path.GetFileName(archivo));
 
-                    string destino = Path.Combine(carpetaHistorico, Path.GetFileName(archivo));
+                if (File.Exists(destino)) File.Delete(destino);
 
-                    if (File.Exists(destino)) File.Delete(destino);
-
-                    File.Move(archivo, destino);
-                    movidos.Add(destino);
-                }
+                File.Move(archivo, destino);
+                movidos.Add(destino);
             }
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
